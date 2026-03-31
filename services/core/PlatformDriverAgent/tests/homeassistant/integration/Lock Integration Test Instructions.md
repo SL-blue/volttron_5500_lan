@@ -1,101 +1,87 @@
-# Home Assistant Integration Tests
+# Lock Integration Tests
 
-These are integration tests for the VOLTTRON Home Assistant driver.
-Unlike unit tests (which use mocks), these tests talk to a **real Home Assistant instance**
-and verify that the driver can actually turn entities on and off.
+These tests verify that the VOLTTRON Home Assistant driver can interact with
+a real `lock` entity in Home Assistant. Unlike unit tests which use mocks,
+these tests make real HTTP requests and actually lock and unlock the device state.
 
 ---
-(Instructions for Mac and Linux machines)
-## What You Need Before Running Tests
 
-- Python 3.12+
+## What is a Template Lock?
+
+Since real lock entities usually require physical hardware, we create a
+virtual `lock.` entity inside Home Assistant for testing. This gives us a
+safe lock target for API and VOLTTRON verification without depending on a
+real door lock.
+
+Our test lock (`lock.test_lock`) should expose the same API behavior as a
+real Home Assistant lock entity. The tests call the lock services and verify
+that Home Assistant responds correctly and that VOLTTRON is scraping the device.
+
+---
+
+## Prerequisites
+
+Before running these tests you need:
+
 - Docker Desktop installed and running
-- The `requests` and `pytest` Python packages
+- Home Assistant running in Docker at `http://localhost:8123`
+- A Long-Lived Access Token from Home Assistant
+- A test lock entity available in Home Assistant as `lock.test_lock`
+- `pytest` and `requests` Python packages installed
 - Ubuntu VM with VOLTTRON running (for full stack verification)
 - SSH key configured from your Mac to the VM (passwordless)
 - Note your Ubuntu VM username (run `whoami` in the VM to find it)
 
----
-
-## Step 1 — Install Docker Desktop
-
-Download and install Docker Desktop from https://www.docker.com/products/docker-desktop/
-
-Or install via Homebrew:
-```bash
-brew install --cask docker
-```
-
-Then open Docker Desktop from your Applications folder and wait for the whale icon in the menu bar to stop animating.
-
-Verify Docker is running:
-```bash
-docker ps
-```
-
-You should see an empty list with no errors.
+If you have not set up Home Assistant yet, follow the light or switch setup instructions first.
 
 ---
 
-## Step 2 — Start Home Assistant
+## Step 1 - Create a Test Lock Entity
 
-Run this command to download and start Home Assistant in a Docker container:
-```bash
-docker run -d \
-  --name homeassistant \
-  -p 8123:8123 \
-  -v ~/homeassistant:/config \
-  ghcr.io/home-assistant/home-assistant:stable
+Create or expose a lock entity in Home Assistant with the entity ID:
+
+```text
+lock.test_lock
 ```
 
-Wait about 2-3 minutes for Home Assistant to fully start, then open your browser at:
-```
-http://localhost:8123
-```
+You can use a lock provided by an integration, emulator, or other Home Assistant
+test setup, as long as the entity appears at:
 
-Complete the setup wizard:
-1. Create an account (remember your username and password)
-2. Name your home anything (e.g. "Test Home")
-3. Set location to anywhere
-4. Skip any device discovery
-
----
-
-## Step 3 — Create a Long-Lived Access Token
-
-This token is how your tests authenticate with Home Assistant.
-
-1. Click your **profile icon** at the bottom left of the sidebar
-2. Scroll down to **Long-Lived Access Tokens**
-3. Click **Create Token**
-4. Name it `volttron`
-5. **Copy the token immediately** — you only see it once!
-
----
-
-## Step 4 — Create Test Entities (Virtual Devices)
-
-These are virtual on/off switches inside Home Assistant — no real hardware needed.
-
-1. Go to **Settings → Devices & Services → Helpers**
-2. Click **+ Create Helper → Toggle**
-3. Name it `test_light` → Click **Create**
-4. Repeat and create another called `test_a`
-
-Your entity IDs will be:
-- `input_boolean.test_light`
-- `input_boolean.test_a`
-
-Verify them by going to:
-```
+```text
 http://localhost:8123/developer-tools/state
 ```
 
+Verify that the entity exists before running the tests.
+
 ---
 
-## Step 5 — Configure the Test File
+## Step 2 - Verify the Lock Entity Exists
 
-Open `test_integration_lights.py` and update these two constants at the top:
+Run this curl command to confirm `lock.test_lock` exists successfully
+(replace `YOUR_TOKEN` with your actual token):
+
+```bash
+curl -s -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:8123/api/states/lock.test_lock | python3 -m json.tool
+```
+
+You should see something like:
+
+```json
+{
+    "entity_id": "lock.test_lock",
+    "state": "locked",
+    ...
+}
+```
+
+The state should be either `locked` or `unlocked`.
+
+---
+
+## Step 3 - Configure the Test File
+
+Open `test_integration_lock.py` and update these constants at the top:
 
 ```python
 HA_URL = "http://localhost:8123"
@@ -170,7 +156,7 @@ Quick checklist:
 
 ---
 
-## Step 6 — Install Python Dependencies
+## Step 4 - Install Python Dependencies
 
 ```bash
 pip install pytest requests --break-system-packages
@@ -186,6 +172,7 @@ Run `whoami` in your VM terminal to find it.
 ### Step 1 - Find your VM username
 
 In your VM terminal:
+
 ```bash
 whoami
 ```
@@ -208,6 +195,7 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/volttron_vm -N ""
 ### Step 4 - Copy key to VM
 
 Enter your password one last time:
+
 ```bash
 ssh-copy-id -p 2222 -i ~/.ssh/volttron_vm.pub YOUR_VM_USERNAME@localhost
 ```
@@ -263,6 +251,7 @@ cat > /tmp/homeassistant.csv << 'EOF'
 Entity ID,Entity Point,Volttron Point Name,Units,Type,Writable,Notes
 input_boolean.test_light,state,test_light,,int,TRUE,Virtual test light
 switch.test_switch,state,test_switch,,int,TRUE,Virtual test switch
+lock.test_lock,state,test_lock,,int,TRUE,Virtual test lock
 EOF
 
 volttron-ctl config store platform.driver homeassistant.csv /tmp/homeassistant.csv --csv
@@ -290,6 +279,7 @@ grep "scraping device: home/homeassistant" ~/volttron/volttron.log | tail -5
 ```
 
 You should see lines like:
+
 ```text
 platform_driver.driver DEBUG: scraping device: home/homeassistant
 platform_driver.driver DEBUG: publishing: devices/home/homeassistant/all
@@ -297,42 +287,57 @@ platform_driver.driver DEBUG: publishing: devices/home/homeassistant/all
 
 ---
 
-## Step 7 — Run the Tests
+## Step 5 - Run the Tests
 
 Navigate to the integration test folder:
+
 ```bash
 cd services/core/PlatformDriverAgent/tests/homeassistant/integration
 ```
 
-### Run ALL tests:
+### Run all lock tests
+
 ```bash
-pytest test_integration_lights.py -v -s
+pytest test_integration_lock.py -v -s
 ```
 
-### Run ONLY the get state test:
+### Run only the get state test
+
 ```bash
-pytest test_integration_lights.py::test_get_light_state -v -s
+pytest test_integration_lock.py::test_get_lock_state -v -s
 ```
 
-### Run ONLY the turn on test:
+### Run only the lock test
+
 ```bash
-pytest test_integration_lights.py::test_set_light_on -v -s
+pytest test_integration_lock.py::test_lock_lock -v -s
 ```
 
-### Run ONLY the turn off test:
-```bash
-pytest test_integration_lights.py::test_set_light_off -v -s
-```
+### Run only the unlock test
 
-The `-v` flag means **verbose** — shows detailed output for each test.
-The `-s` flag means **show print statements** — shows your log output.
+```bash
+pytest test_integration_lock.py::test_lock_unlock -v -s
+```
 
 ---
 
-## Watching Tests Run in Real Time
+## What the Tests Do
 
-Open your browser at `http://localhost:8123` while running the tests.
-Go to **Settings → Devices & Services → Helpers** and watch `test_light` toggle on and off as each test runs!
+**`test_get_lock_state`**
+Calls `GET /api/states/lock.test_lock` and verifies:
+- Response status is 200
+- Response contains a `state` field
+- State is either `locked` or `unlocked`
+
+**`test_lock_lock`**
+Calls `POST /api/services/lock/lock` and verifies:
+- Response status is 200
+- The lock service accepts the request
+
+**`test_lock_unlock`**
+Calls `POST /api/services/lock/unlock` and verifies:
+- Response status is 200
+- The unlock service accepts the request
 
 Each test also verifies VOLTTRON is actively scraping Home Assistant
 by SSHing into your Ubuntu VM and checking the VOLTTRON log for:
@@ -346,86 +351,69 @@ your SSH key to connect to the VM automatically without a password.
 
 ---
 
-## Manually Toggle Entities from the Command Line
+## Manually Control the Lock from Command Line
 
-You can also control entities directly using `curl` (replace `YOUR_TOKEN` with your token):
+### Lock the entity
 
-### Turn light ON:
 ```bash
 curl -s -X POST \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"entity_id": "input_boolean.test_light"}' \
-  http://localhost:8123/api/services/input_boolean/turn_on
+  -d '{"entity_id": "lock.test_lock"}' \
+  http://localhost:8123/api/services/lock/lock
 ```
 
-### Turn light OFF:
+### Unlock the entity
+
 ```bash
 curl -s -X POST \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"entity_id": "input_boolean.test_light"}' \
-  http://localhost:8123/api/services/input_boolean/turn_off
+  -d '{"entity_id": "lock.test_lock"}' \
+  http://localhost:8123/api/services/lock/unlock
 ```
 
-### Check current state:
+### Check current state
+
 ```bash
 curl -s \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8123/api/states/input_boolean.test_light | python3 -m json.tool | grep state
-```
-
----
-
-## Stopping Home Assistant
-
-When you're done testing, stop and remove the container:
-```bash
-docker stop homeassistant
-docker rm homeassistant
-```
-
-To start it again later:
-```bash
-docker start homeassistant
+  http://localhost:8123/api/states/lock.test_lock | python3 -m json.tool | grep state
 ```
 
 ---
 
 ## Troubleshooting
 
-**`http://localhost:8123` not loading:**
-Home Assistant is still starting up. Wait 2-3 minutes and try again. Check logs with:
+**`lock.test_lock` not found:**
+Make sure your test lock entity exists in Home Assistant.
+Check it in Developer Tools and verify the entity ID matches exactly.
+
+**Tests not collected (0 items):**
+Make sure you are in the integration folder and `pytest.ini` exists:
+
 ```bash
-docker logs homeassistant --tail 20
+ls pytest.ini
 ```
-
-**`collected 0 items` when running pytest:**
-You're in the wrong folder. Make sure you `cd` into the `integration` folder first.
-
-**`ImportError` about conftest.py:**
-Make sure there is an empty `conftest.py` and a `pytest.ini` file in the integration folder:
-```bash
-touch conftest.py
-echo "[pytest]
-rootdir = ." > pytest.ini
-```
-
-**Token not working:**
-Generate a new token from your Home Assistant profile page and update `TOKEN` in the test file.
 
 **`VOLTTRON scraping: False` in test output:**
 - Make sure your Ubuntu VM is running in VirtualBox
 - SSH into your VM and check VOLTTRON status:
+
 ```bash
 volttron-ctl status
 ```
+
 - Make sure the Home Assistant driver is configured:
+
 ```bash
 volttron-ctl config list platform.driver
 ```
+
 Should show `devices/home/homeassistant`.
+
 - Check VOLTTRON logs:
+
 ```bash
 grep "home/homeassistant" ~/volttron/volttron.log
 ```
@@ -434,6 +422,7 @@ grep "home/homeassistant" ~/volttron/volttron.log
 - SSH key is not set up correctly
 - Re-run the SSH key setup steps above
 - Verify with:
+
 ```bash
 ssh -p 2222 YOUR_VM_USERNAME@localhost "echo connected"
 ```

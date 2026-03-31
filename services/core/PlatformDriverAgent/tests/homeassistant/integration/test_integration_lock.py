@@ -2,7 +2,6 @@ import pytest
 import requests
 import subprocess
 
-
 def check_volttron_is_scraping():
     result = subprocess.run([
         'ssh', '-i', '/Users/paulaminozzo/.ssh/volttron_vm', '-p', '2222', 'paula-minozzo@localhost',
@@ -27,23 +26,25 @@ HA_URL = "http://localhost:8123"
 TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2NzVhNTZkYWIwODQ0MzM2YmY4MWZlNmJhMjAxNjhiNSIsImlhdCI6MTc3NDgyNTYyOCwiZXhwIjoyMDkwMTg1NjI4fQ._bPz-KYWEGLVaONTMtO9z-7U_xbClqxNF2ZaiEuyj0I"
 HEADERS = {"Authorization": "Bearer " + TOKEN}
 
-def test_get_switch_state ():
-    response = requests.get(f"{HA_URL}/api/states/switch.test_switch", headers=HEADERS)
+# Makes a GET request to lock.test_lock and checks the response status is 200
+def test_get_lock_state():
+    response = requests.get(f"{HA_URL}/api/states/lock.test_lock", headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
-    print("\n=== TEST: GET switch state ===")
+    print("\n=== TEST: GET lock state ===")
     print(f"\nVOLTTRON scraping: {check_volttron_is_scraping()}")
     assert check_volttron_is_scraping(), "VOLTTRON is not scraping Home Assistant!"
     assert "state" in data
-    assert data["state"] in ["on", "off"]
+    assert data["state"] in ["locked", "unlocked"]
     print(f"Response: {response.text}")
     response_message = get_status_message(response.status_code)
     print(f"Status: {response.status_code} - {response_message}")
-    print(f"Switch state is: {data['state']}")
+    print(f"Lock state is: {data['state']}")
 
-def test_set_switch_on():
-    response = requests.post(f"{HA_URL}/api/services/switch/turn_on", headers=HEADERS, json={"entity_id": "switch.test_switch"})
-    print("\n=== TEST: Set switch ON ===")
+# Makes a POST request to lock the lock entity
+def test_lock_lock():
+    response = requests.post(f"{HA_URL}/api/services/lock/lock", headers=HEADERS, json={"entity_id": "lock.test_lock"})
+    print("\n=== TEST: LOCK the lock ===")
     print(f"Response: {response.text}")
     response_message = get_status_message(response.status_code)
     print(f"Status: {response.status_code} - {response_message}")
@@ -51,14 +52,13 @@ def test_set_switch_on():
     assert check_volttron_is_scraping(), "VOLTTRON is not scraping Home Assistant!"
     assert response.status_code == 200
 
-def test_set_switch_off():
-    response = requests.post(f"{HA_URL}/api/services/switch/turn_off", headers=HEADERS, json={"entity_id": "switch.test_switch"})
-    print("\n=== TEST: Set switch OFF ===")
+# Makes a POST request to unlock the lock entity
+def test_lock_unlock():
+    response = requests.post(f"{HA_URL}/api/services/lock/unlock", headers=HEADERS, json={"entity_id": "lock.test_lock"})
+    print("\n=== TEST: UNLOCK the lock ===")
     print(f"Response: {response.text}")
     response_message = get_status_message(response.status_code)
     print(f"Status: {response.status_code} - {response_message}")
     print(f"\nVOLTTRON scraping: {check_volttron_is_scraping()}")
     assert check_volttron_is_scraping(), "VOLTTRON is not scraping Home Assistant!"
-    if response.status_code == 200:
-        print("Switch off test passed!")
     assert response.status_code == 200

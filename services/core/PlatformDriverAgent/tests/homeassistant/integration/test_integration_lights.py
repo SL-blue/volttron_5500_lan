@@ -1,5 +1,13 @@
 import pytest
 import requests
+import subprocess
+
+def check_volttron_is_scraping():
+    result = subprocess.run([
+        'ssh', '-i', '/Users/paulaminozzo/.ssh/volttron_vm', '-p', '2222', 'paula-minozzo@localhost',
+        'grep "scraping device: home/homeassistant" ~/volttron/volttron.log | tail -1'
+    ], capture_output=True, text=True)
+    return "scraping device" in result.stdout
 
 STATUS_CODES = {
     200: "Success - request worked perfectly",
@@ -25,6 +33,8 @@ def test_get_light_state ():
     assert response.status_code == 200
     data = response.json()
     print("\n=== TEST: GET light state ===")
+    print(f"\nVOLTTRON scraping: {check_volttron_is_scraping()}")
+    assert check_volttron_is_scraping(), "VOLTTRON is not scraping Home Assistant!"
     assert "state" in data
     assert data["state"] in ["on", "off"]
     print(f"Response: {response.text}")
@@ -38,6 +48,8 @@ def test_set_light_on():
     print(f"Response: {response.text}")
     response_message = get_status_message(response.status_code)
     print(f"Status: {response.status_code} - {response_message}")
+    print(f"\nVOLTTRON scraping: {check_volttron_is_scraping()}")
+    assert check_volttron_is_scraping(), "VOLTTRON is not scraping Home Assistant!"
     assert response.status_code == 200
 
 def test_set_light_off():
@@ -46,4 +58,6 @@ def test_set_light_off():
     print(f"Response: {response.text}")
     response_message = get_status_message(response.status_code)
     print(f"Status: {response.status_code} - {response_message}")
+    print(f"\nVOLTTRON scraping: {check_volttron_is_scraping()}")
+    assert check_volttron_is_scraping(), "VOLTTRON is not scraping Home Assistant!"
     assert response.status_code == 200

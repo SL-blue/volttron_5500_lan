@@ -29,6 +29,9 @@ Before running these tests you need:
 - The `input_boolean.test_a` helper created in Home Assistant
 - The `switch.test_switch` template switch configured in `configuration.yaml`
 - `pytest` and `requests` Python packages installed
+- Ubuntu VM with VOLTTRON running (for full stack verification)
+- SSH key configured from your Mac to the VM (passwordless)
+- Note your Ubuntu VM username (run `whoami` in the VM to find it)
 
 If you haven't set up Home Assistant yet, follow the instructions in `README.md` first.
 
@@ -124,12 +127,197 @@ HA_URL = "http://localhost:8123"
 TOKEN = "paste_your_token_here"
 ```
 
+Before running the tests you MUST update the `check_volttron_is_scraping()`
+function in the test file to match your own username.
+
+Find this function at the top of the test file:
+
+```python
+def check_volttron_is_scraping():
+    result = subprocess.run([
+        'ssh', '-i', '/Users/paulaminozzo/.ssh/volttron_vm', '-p', '2222', 'paula-minozzo@localhost',
+        'grep "scraping device: home/homeassistant" ~/volttron/volttron.log | tail -1'
+    ], capture_output=True, text=True)
+    return "scraping device" in result.stdout
+```
+
+Replace two things:
+
+1. Replace `paulaminozzo` in the SSH key path with your Mac username
+   - Find your Mac username by running `whoami` on your Mac
+   - Example: `/Users/YOUR_MAC_USERNAME/.ssh/volttron_vm`
+
+2. Replace `paula-minozzo` in the SSH command with your Ubuntu VM username
+   - Find your VM username by running `whoami` in your VM terminal
+   - Example: `YOUR_VM_USERNAME@localhost`
+
+The corrected function should look like:
+
+```python
+def check_volttron_is_scraping():
+    result = subprocess.run([
+        'ssh', '-i', '/Users/YOUR_MAC_USERNAME/.ssh/volttron_vm', '-p', '2222', 'YOUR_VM_USERNAME@localhost',
+        'grep "scraping device: home/homeassistant" ~/volttron/volttron.log | tail -1'
+    ], capture_output=True, text=True)
+    return "scraping device" in result.stdout
+```
+
+Before running the tests, update these values in each test file:
+
+1. `TOKEN` in all test files
+   Find: `TOKEN = "eyJhbGci..."`
+   Replace: `TOKEN = "your_home_assistant_token_here"`
+   How to get it: Home Assistant → Profile → Long-Lived Access Tokens → Create Token
+
+2. SSH key path in `check_volttron_is_scraping()`
+   Find: `'/Users/paulaminozzo/.ssh/volttron_vm'`
+   Replace: `'/Users/YOUR_MAC_USERNAME/.ssh/volttron_vm'`
+   How to find your Mac username: run `whoami` in your Mac terminal
+
+3. VM username in `check_volttron_is_scraping()`
+   Find: `'paula-minozzo@localhost'`
+   Replace: `'YOUR_VM_USERNAME@localhost'`
+   How to find your VM username: run `whoami` in your Ubuntu VM terminal
+
+Quick checklist:
+- [ ] Updated `TOKEN` in `test_integration_lights.py`
+- [ ] Updated `TOKEN` in `test_integration_switch.py`
+- [ ] Updated `TOKEN` in `test_integration_lock.py`
+- [ ] Updated SSH key path in all three test files
+- [ ] Updated VM username in all three test files
+- [ ] Created `input_boolean.test_light` helper in Home Assistant
+- [ ] Created `input_boolean.test_a` helper in Home Assistant
+- [ ] Created `switch.test_switch` via `configuration.yaml`
+- [ ] Created `lock.test_lock` in Home Assistant
+- [ ] SSH keys set up and passwordless connection works
+- [ ] VOLTTRON running in Ubuntu VM
+- [ ] Home Assistant driver configured in VOLTTRON
+
 ---
 
 ## Step 5 — Install Python Dependencies
 
 ```bash
 pip install pytest requests --break-system-packages
+```
+
+---
+
+## Set Up SSH Keys for VOLTTRON Verification
+
+Replace `YOUR_VM_USERNAME` with your actual Ubuntu username.
+Run `whoami` in your VM terminal to find it.
+
+### Step 1 - Find your VM username
+
+In your VM terminal:
+```bash
+whoami
+```
+
+### Step 2 - Find your VM IP and set up port forwarding in VirtualBox
+
+In `VirtualBox Settings → Network → Advanced → Port Forwarding` add:
+
+- Name: `SSH`
+- Protocol: `TCP`
+- Host Port: `2222`
+- Guest Port: `22`
+
+### Step 3 - Generate SSH key on your Mac
+
+```bash
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/volttron_vm -N ""
+```
+
+### Step 4 - Copy key to VM
+
+Enter your password one last time:
+```bash
+ssh-copy-id -p 2222 -i ~/.ssh/volttron_vm.pub YOUR_VM_USERNAME@localhost
+```
+
+### Step 5 - Configure SSH
+
+```bash
+echo "Host localhost
+  Port 2222
+  User YOUR_VM_USERNAME
+  IdentityFile ~/.ssh/volttron_vm" >> ~/.ssh/config
+```
+
+### Step 6 - Verify it works without a password
+
+```bash
+ssh -p 2222 YOUR_VM_USERNAME@localhost "echo connected"
+```
+
+---
+
+## VOLTTRON Setup
+
+Replace `YOUR_VM_USERNAME` with your Ubuntu username.
+Replace `YOUR_TOKEN` with your Home Assistant long-lived access token.
+
+### SSH into your VM from your Mac
+
+```bash
+ssh -p 2222 YOUR_VM_USERNAME@localhost
+```
+
+### Start VOLTTRON
+
+```bash
+cd ~/volttron && source env/bin/activate
+volttron -vv -l volttron.log &
+volttron-ctl start 4
+```
+
+### Check VOLTTRON is running
+
+```bash
+volttron-ctl status
+```
+
+You should see `platform_driveragent` running `[GOOD]`.
+
+### Configure the Home Assistant driver
+
+```bash
+cat > /tmp/homeassistant.csv << 'EOF'
+Entity ID,Entity Point,Volttron Point Name,Units,Type,Writable,Notes
+input_boolean.test_light,state,test_light,,int,TRUE,Virtual test light
+switch.test_switch,state,test_switch,,int,TRUE,Virtual test switch
+EOF
+
+volttron-ctl config store platform.driver homeassistant.csv /tmp/homeassistant.csv --csv
+
+cat > /tmp/homeassistant_driver.json << 'EOF'
+{
+    "driver_config": {
+        "ip_address": "10.0.2.2",
+        "access_token": "YOUR_TOKEN",
+        "port": 8123
+    },
+    "driver_type": "home_assistant",
+    "registry_config": "config://homeassistant.csv",
+    "interval": 60
+}
+EOF
+
+volttron-ctl config store platform.driver devices/home/homeassistant /tmp/homeassistant_driver.json
+```
+
+### Verify VOLTTRON is scraping
+
+```bash
+grep "scraping device: home/homeassistant" ~/volttron/volttron.log | tail -5
+```
+
+You should see lines like:
+```text
+platform_driver.driver DEBUG: scraping device: home/homeassistant
+platform_driver.driver DEBUG: publishing: devices/home/homeassistant/all
 ```
 
 ---
@@ -181,6 +369,16 @@ Calls `POST /api/services/switch/turn_on` and verifies:
 Calls `POST /api/services/switch/turn_off` and verifies:
 - Response status is 200
 - The switch was actually turned off
+
+Each test also verifies VOLTTRON is actively scraping Home Assistant
+by SSHing into your Ubuntu VM and checking the VOLTTRON log for:
+`scraping device: home/homeassistant`
+
+This proves the full stack is working:
+Mac (pytest) → Home Assistant API → VOLTTRON driver → VOLTTRON message bus
+
+Note: The `check_volttron_is_scraping()` function in the test file uses
+your SSH key to connect to the VM automatically without a password.
 
 ---
 
@@ -270,3 +468,31 @@ ls conftest.py pytest.ini
 Verify `input_boolean.test_a` exists in Home Assistant.
 The template switch depends on it — if `test_a` is missing,
 `switch.test_switch` won't work.
+
+**`VOLTTRON scraping: False` in test output:**
+- Make sure your Ubuntu VM is running in VirtualBox
+- SSH into your VM and check VOLTTRON status:
+```bash
+volttron-ctl status
+```
+- Make sure the Home Assistant driver is configured:
+```bash
+volttron-ctl config list platform.driver
+```
+Should show `devices/home/homeassistant`.
+- Check VOLTTRON logs:
+```bash
+grep "home/homeassistant" ~/volttron/volttron.log
+```
+
+**SSH asking for password during tests:**
+- SSH key is not set up correctly
+- Re-run the SSH key setup steps above
+- Verify with:
+```bash
+ssh -p 2222 YOUR_VM_USERNAME@localhost "echo connected"
+```
+
+**VM not reachable:**
+- Make sure VirtualBox port forwarding is configured on port `2222`
+- Make sure your VM is running and fully booted
