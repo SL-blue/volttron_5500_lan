@@ -18,32 +18,27 @@ HA_URL = "http://localhost:8123"
 TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2NzVhNTZkYWIwODQ0MzM2YmY4MWZlNmJhMjAxNjhiNSIsImlhdCI6MTc3NDgyNTYyOCwiZXhwIjoyMDkwMTg1NjI4fQ._bPz-KYWEGLVaONTMtO9z-7U_xbClqxNF2ZaiEuyj0I"
 HEADERS = {"Authorization": "Bearer " + TOKEN}
 
-#Makes a GET request to that URL using requests.get() with our HEADERS
-#Checks that the response status code is 200 (meaning success)
-def test_get_light_state ():
-    response = requests.get(f"{HA_URL}/api/states/input_boolean.test_light", headers=HEADERS)
+def test_get_switch_state ():
+    response = requests.get(f"{HA_URL}/api/states/switch.test_switch", headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
-    print("\n=== TEST: GET light state ===")
+    print("\n=== TEST: GET switch state ===")
     assert "state" in data
     assert data["state"] in ["on", "off"]
-    print(f"Response: {response.text}")
     response_message = get_status_message(response.status_code)
     print(f"Status: {response.status_code} - {response_message}")
-    print(f"Light state is: {data['state']}")
+    print(f"Switch state is: {data['state']}")
 
-def test_set_light_on():
-    response = requests.post(f"{HA_URL}/api/services/input_boolean/turn_on", headers=HEADERS, json={"entity_id": "input_boolean.test_light"})
-    print("\n=== TEST: Set light ON ===")
+def test_set_switch_on():
+    response = requests.post(f"{HA_URL}/api/services/switch/turn_on", headers=HEADERS, json={"entity_id": "switch.test_switch"})
+    print("\n=== TEST: Set switch ON ===")
     print(f"Response: {response.text}")
-    response_message = get_status_message(response.status_code)
-    print(f"Status: {response.status_code} - {response_message}")
+    print(f"Status: {response.status_code} - {get_status_message(response.status_code)}")
     assert response.status_code == 200
 
-def test_set_light_off():
-    response = requests.post(f"{HA_URL}/api/services/input_boolean/turn_off", headers=HEADERS, json={"entity_id": "input_boolean.test_light"})
-    print("\n=== TEST: Set light OFF ===")
+def test_set_switch_off():
+    response = requests.post(f"{HA_URL}/api/services/switch/turn_off", headers=HEADERS, json={"entity_id": "switch.test_switch"})
+    print("\n=== TEST: Set switch OFF ===")
     print(f"Response: {response.text}")
-    response_message = get_status_message(response.status_code)
-    print(f"Status: {response.status_code} - {response_message}")
+    print(f"Status: {response.status_code} - {get_status_message(response.status_code)}")
     assert response.status_code == 200
