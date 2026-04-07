@@ -3,9 +3,9 @@
 Home Assistant Driver
 =====================
 
-The Home Assistant driver enables VOLTTRON to read any data point from any Home Assistant controlled device.
-Currently control(write access) is supported only for lights(state and brightness) and thermostats(state and temperature).
-
+The Home Assistant driver enables VOLTTRON to read data points from Home Assistant controlled devices through the Home Assistant REST API. 
+In the current implementation, write access is supported through domain-specific handlers for lights, thermostats, locks, switches, and input booleans. 
+For example, the driver supports light state and brightness control, thermostat mode and temperature-related points, and on/off or lock/unlock style control for switch- and lock-based entities.
 The following diagram shows interaction between platform driver agent and home assistant driver.
 
 .. mermaid::
@@ -178,9 +178,57 @@ Upon completion, initiate the platform driver. Utilize the listener agent to ver
 
 Running Tests
 +++++++++++++++++++++++
-To run tests on the VOLTTRON home assistant driver you need to create a helper in your home assistant instance. This can be done by going to **Settings > Devices & services > Helpers > Create Helper > Toggle**. Name this new toggle **volttrontest**. After that run the pytest from the root of your VOLTTRON file.
+
+Testing the Home Assistant driver should be done in two stages: manual integration testing against a live Home Assistant instance, followed by automated integration and unit tests.
+
+For manual integration testing, run VOLTTRON and Home Assistant in environments that can reach each other over the network. Then:
+
+1. Configure the Home Assistant entities you want to test.
+2. Load the corresponding registry file and device configuration into VOLTTRON.
+3. Start the PlatformDriverAgent.
+4. Use the Listener Agent to confirm that VOLTTRON is scraping data from Home Assistant.
+5. Issue write commands from VOLTTRON for the supported points, and verify in the Home Assistant UI that the target entity changes state as expected.
+
+This validates the full integration path:
+
+- VOLTTRON PlatformDriverAgent
+- Home Assistant driver
+- Home Assistant REST API
+- Home Assistant entity state change
+
+A typical configuration workflow is:
 
 .. code-block:: bash
-    pytest volttron/services/core/PlatformDriverAgent/tests/test_home_assistant.py
 
-If everything works, you will see 6 passed tests.
+   vctl config store platform.driver <registry_name>.csv HomeAssistant_Driver/<registry_name>.csv
+   vctl config store platform.driver devices/<campus>/<building>/<unit>/<device_name> HomeAssistant_Driver/<device_config>.config
+
+Connection settings such as the Home Assistant host, port, and access token should be provided through environment configuration rather than hard-coded test values.
+
+After loading the configuration, start the platform driver and use the listener agent to confirm that data is being published on the device topic.
+
+Automated tests should then be run from the VOLTTRON repository root. The current test structure includes integration tests for each supported feature, along with unit tests for handler behavior.
+
+Run the Home Assistant integration tests with:
+
+.. code-block:: bash
+
+   pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_light.py
+   pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_climate.py
+   pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_lock.py
+   pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_switch.py
+
+These integration tests verify that VOLTTRON can communicate with a live Home Assistant instance and that supported points behave correctly end-to-end.
+
+If your branch also includes unit tests for the handler modules, run those as well to validate handler logic in isolation:
+
+.. code-block:: bash
+
+   pytest services/core/PlatformDriverAgent/tests/homeassistant/unit/
+
+When documenting test results for this driver, focus on the actual end-to-end behaviors that were verified, such as:
+
+- VOLTTRON can read entity state from Home Assistant
+- writable points invoke the expected Home Assistant service calls
+- updated entity states are reflected back through the driver publish path
+- each supported feature behaves correctly in both manual and automated integration tests
