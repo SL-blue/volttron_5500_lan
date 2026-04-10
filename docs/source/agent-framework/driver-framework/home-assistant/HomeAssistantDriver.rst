@@ -232,3 +232,126 @@ When documenting test results for this driver, focus on the actual end-to-end be
 - writable points invoke the expected Home Assistant service calls
 - updated entity states are reflected back through the driver publish path
 - each supported feature behaves correctly in both manual and automated integration tests
+
+Example Lock Registry
+***************************
+
+Lock entities support reading and writing the lock state. Writing a value of ``1`` calls the ``lock/lock`` service
+in Home Assistant; writing ``0`` calls ``lock/unlock``.
+
+Below is an example file named lock.example.json which has the state attribute of a single lock entity
+with entity id 'lock.front_door':
+
+.. code-block:: json
+
+   [
+       {
+           "Entity ID": "lock.front_door",
+           "Entity Point": "state",
+           "Volttron Point Name": "front_door_lock_state",
+           "Units": "Locked / Unlocked",
+           "Units Details": "1=locked, 0=unlocked",
+           "Writable": true,
+           "Starting Value": 1,
+           "Type": "int",
+           "Notes": "Front door lock"
+       }
+   ]
+
+When grouping multiple lock entities into one registry file, ensure each ``Volttron Point Name`` is unique:
+
+.. code-block:: json
+
+   [
+       {
+           "Entity ID": "lock.front_door",
+           "Entity Point": "state",
+           "Volttron Point Name": "front_door/state",
+           "Units": "Locked / Unlocked",
+           "Units Details": "1=locked, 0=unlocked",
+           "Writable": true,
+           "Starting Value": 1,
+           "Type": "int",
+           "Notes": "Front door lock"
+       },
+       {
+           "Entity ID": "lock.back_door",
+           "Entity Point": "state",
+           "Volttron Point Name": "back_door/state",
+           "Units": "Locked / Unlocked",
+           "Units Details": "1=locked, 0=unlocked",
+           "Writable": true,
+           "Starting Value": 1,
+           "Type": "int",
+           "Notes": "Back door lock"
+       }
+   ]
+
+Transfer the registry file and the device configuration file into the VOLTTRON config store using the commands below:
+
+.. code-block:: bash
+
+   vctl config store platform.driver lock.example.json HomeAssistant_Driver/lock.example.json
+   vctl config store platform.driver devices/BUILDING/ROOM/lock.example HomeAssistant_Driver/lock.example.config
+
+
+Example Switch Registry
+***************************
+
+Switch entities support reading and writing the on/off state. Writing a value of ``1`` calls the ``switch/turn_on``
+service in Home Assistant; writing ``0`` calls ``switch/turn_off``.
+
+Below is an example file named switch.example.json which has the state attribute of a single switch entity
+with entity id 'switch.living_room_fan':
+
+.. code-block:: json
+
+   [
+       {
+           "Entity ID": "switch.living_room_fan",
+           "Entity Point": "state",
+           "Volttron Point Name": "living_room_fan_state",
+           "Units": "On / Off",
+           "Units Details": "1=on, 0=off",
+           "Writable": true,
+           "Starting Value": 0,
+           "Type": "int",
+           "Notes": "Living room fan switch"
+       }
+   ]
+
+When grouping multiple switch entities into one registry file, ensure each ``Volttron Point Name`` is unique:
+
+.. code-block:: json
+
+   [
+       {
+           "Entity ID": "switch.living_room_fan",
+           "Entity Point": "state",
+           "Volttron Point Name": "living_room_fan/state",
+           "Units": "On / Off",
+           "Units Details": "1=on, 0=off",
+           "Writable": true,
+           "Starting Value": 0,
+           "Type": "int",
+           "Notes": "Living room fan switch"
+       },
+       {
+           "Entity ID": "switch.garage_light",
+           "Entity Point": "state",
+           "Volttron Point Name": "garage_light/state",
+           "Units": "On / Off",
+           "Units Details": "1=on, 0=off",
+           "Writable": true,
+           "Starting Value": 0,
+           "Type": "int",
+           "Notes": "Garage light switch"
+       }
+   ]
+
+Transfer the registry file and the device configuration file into the VOLTTRON config store using the commands below:
+
+.. code-block:: bash
+
+   vctl config store platform.driver switch.example.json HomeAssistant_Driver/switch.example.json
+   vctl config store platform.driver devices/BUILDING/ROOM/switch.example HomeAssistant_Driver/switch.example.config
