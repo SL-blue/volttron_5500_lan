@@ -1,53 +1,53 @@
 .. _HomeAssistant-Driver:
-
+ 
 Home Assistant Driver
 =====================
-
-The Home Assistant driver enables VOLTTRON to read data points from Home Assistant controlled devices through the Home Assistant REST API. 
-In the current implementation, write access is supported through domain-specific handlers for lights, thermostats, locks, and switches. 
-For example, the driver supports light state and brightness control, thermostat mode and temperature-related points, lock/unlock control for lock entities, and on/off control for switch entities.
+ 
+The Home Assistant driver enables VOLTTRON to read data points from Home Assistant controlled devices through the Home Assistant REST API.
+In the current implementation, write access is supported through domain-specific handlers for lights, thermostats, locks, and switches.
+For example, the driver supports light state and brightness control, thermostat mode, current temperature, and target temperature set points, lock/unlock control for lock entities, and on/off control for switch entities.
 The following diagram shows interaction between platform driver agent and home assistant driver.
-
+ 
 .. mermaid::
-
+ 
    sequenceDiagram
        HomeAssistant Driver->>HomeAssistant: Retrieve Entity Data (REST API)
        HomeAssistant-->>HomeAssistant Driver: Entity Data (Status Code: 200)
        HomeAssistant Driver->>PlatformDriverAgent: Publish Entity Data
        PlatformDriverAgent->>Controller Agent: Publish Entity Data
-
+ 
        Controller Agent->>HomeAssistant Driver: Instruct to Turn Off Light
        HomeAssistant Driver->>HomeAssistant: Send Turn Off Light Command (REST API)
        HomeAssistant-->>HomeAssistant Driver: Command Acknowledgement (Status Code: 200)
-
+ 
 Pre-requisites
 --------------
 Before proceeding, find your Home Assistant IP address and long-lived access token from `here <https://developers.home-assistant.io/docs/auth_api/#long-lived-access-token>`_.
-
+ 
 Clone the repository, start volttron, install the listener agent, and the platform driver agent.
-
+ 
 - `Listener agent <https://volttron.readthedocs.io/en/main/introduction/platform-install.html#installing-and-running-agents>`_
 - `Platform driver agent <https://volttron.readthedocs.io/en/main/agent-framework/core-service-agents/platform-driver/platform-driver-agent.html?highlight=platform%20driver%20isntall#configuring-the-platform-driver>`_
-
+ 
 Configuration
 --------------
-
+ 
 After cloning, generate configuration files. Each device requires one device configuration file and one registry file.
 Ensure your registry_config parameter in your device configuration file, links to correct registry config name in the
 config store. For more details on how volttron platform driver agent works with volttron configuration store see,
 `Platform driver configuration <https://volttron.readthedocs.io/en/main/agent-framework/driver-framework/platform-driver/platform-driver.html#configuration-and-installation>`_
 Examples for lights, thermostats, locks, and switches are provided below.
-
+ 
 Device configuration
 ++++++++++++++++++++
-
+ 
 Device configuration file contains the connection details to your home assistant instance and driver_type as "home_assistant".
 The connection fields (``ip_address``, ``access_token``, ``port``) are provided as literal values in the device
 configuration file and stored in the VOLTTRON config store at runtime. This is separate from the environment-based
 configuration recommended for testing (see `Running Tests`_ below).
-
+ 
 .. code-block:: json
-
+ 
    {
        "driver_config": {
            "ip_address": "Your Home Assistant IP",
@@ -59,28 +59,28 @@ configuration recommended for testing (see `Running Tests`_ below).
        "interval": 30,
        "timezone": "UTC"
    }
-
+ 
 Registry Configuration
 +++++++++++++++++++++++
-
+ 
 Registry file can contain one single device and its attributes or a logical group of devices and its
 attributes. Each entry should include the full entity id of the device, including but not limited to home assistant provided prefix
 such as "light.", "climate.", "lock.", "switch." etc. The driver uses these prefixes to convert states into integers
 and to route write commands to the correct Home Assistant service.
-
+ 
 Each entry in a registry file should also have a 'Entity Point' and a unique value for 'Volttron Point Name'. The 'Entity ID' maps to the device instance, the 'Entity Point' extracts the attribute or state, and 'Volttron Point Name' determines the name of that point as it appears in VOLTTRON.
-
+ 
 Attributes can be located in the developer tools in the Home Assistant GUI.
-
+ 
 .. image:: home-assistant.png
-
-
+ 
+ 
 Below is an example file named light.example.json which has attributes of a single light instance with entity
 id 'light.example':
-
-
+ 
+ 
 .. code-block:: json
-
+ 
    [
        {
            "Entity ID": "light.example",
@@ -105,25 +105,25 @@ id 'light.example':
            "Notes": "brightness control, 0 - 255"
        }
    ]
-
-
+ 
+ 
 .. note::
-
+ 
 When using a single registry file to represent a logical group of multiple physical entities, make sure the
 "Volttron Point Name" is unique within a single registry file.
-
+ 
 For example, if a registry file contains entities with
 id  'light.instance1' and 'light.instance2' the entry for the attribute brightness for these two light instances could
 have "Volttron Point Name" as 'light1/brightness' and 'light2/brightness' respectively. This would ensure that data
 is posted to unique topic names and brightness data from light1 is not overwritten by light2 or vice-versa.
-
+ 
 Example Thermostat Registry
 ***************************
-
+ 
 For thermostats, the state is converted into numbers as follows: "0: Off, 2: heat, 3: Cool, 4: Auto",
-
+ 
 .. code-block:: json
-
+ 
    [
        {
            "Entity ID": "climate.my_thermostat",
@@ -159,36 +159,36 @@ For thermostats, the state is converted into numbers as follows: "0: Off, 2: hea
            "Notes": "Target Temp"
        }
    ]
-
-
-
+ 
+ 
+ 
 Transfer the registers files and the config files into the VOLTTRON config store using the commands below:
-
+ 
 .. code-block:: bash
-
+ 
    vctl config store platform.driver light.example.json HomeAssistant_Driver/light.example.json
    vctl config store platform.driver devices/BUILDING/ROOM/light.example HomeAssistant_Driver/light.example.config
-
+ 
 Upon completion, initiate the platform driver. Utilize the listener agent to verify the driver output:
-
+ 
 .. code-block:: bash
-
+ 
    2023-09-12 11:37:00,226 (listeneragent-3.3 211531) __main__ INFO: Peer: pubsub, Sender: platform.driver:, Bus: , Topic: devices/BUILDING/ROOM/light.example/all, Headers: {'Date': '2023-09-12T18:37:00.224648+00:00', 'TimeStamp': '2023-09-12T18:37:00.224648+00:00', 'SynchronizedTimeStamp': '2023-09-12T18:37:00.000000+00:00', 'min_compatible_version': '3.0', 'max_compatible_version': ''}, Message:
    [{'light_brightness': 254, 'state': 'on'},
     {'light_brightness': {'type': 'integer', 'tz': 'UTC', 'units': 'int'},
      'state': {'type': 'integer', 'tz': 'UTC', 'units': 'On / Off'}}]
-
+ 
 Example Lock Registry
 ***************************
-
+ 
 Lock entities support reading and writing the lock state. Writing a value of ``1`` calls the ``lock/lock`` service
 in Home Assistant; writing ``0`` calls ``lock/unlock``.
-
+ 
 Below is an example file named lock.example.json which has the state attribute of a single lock entity
 with entity id 'lock.front_door':
-
+ 
 .. code-block:: json
-
+ 
    [
        {
            "Entity ID": "lock.front_door",
@@ -202,11 +202,11 @@ with entity id 'lock.front_door':
            "Notes": "Front door lock"
        }
    ]
-
+ 
 When grouping multiple lock entities into one registry file, ensure each ``Volttron Point Name`` is unique:
-
+ 
 .. code-block:: json
-
+ 
    [
        {
            "Entity ID": "lock.front_door",
@@ -231,26 +231,26 @@ When grouping multiple lock entities into one registry file, ensure each ``Voltt
            "Notes": "Back door lock"
        }
    ]
-
+ 
 Transfer the registry file and the device configuration file into the VOLTTRON config store using the commands below:
-
+ 
 .. code-block:: bash
-
+ 
    vctl config store platform.driver lock.example.json HomeAssistant_Driver/lock.example.json
    vctl config store platform.driver devices/BUILDING/ROOM/lock.example HomeAssistant_Driver/lock.example.config
-
-
+ 
+ 
 Example Switch Registry
 ***************************
-
+ 
 Switch entities support reading and writing the on/off state. Writing a value of ``1`` calls the ``switch/turn_on``
 service in Home Assistant; writing ``0`` calls ``switch/turn_off``.
-
+ 
 Below is an example file named switch.example.json which has the state attribute of a single switch entity
 with entity id 'switch.living_room_fan':
-
+ 
 .. code-block:: json
-
+ 
    [
        {
            "Entity ID": "switch.living_room_fan",
@@ -264,11 +264,11 @@ with entity id 'switch.living_room_fan':
            "Notes": "Living room fan switch"
        }
    ]
-
+ 
 When grouping multiple switch entities into one registry file, ensure each ``Volttron Point Name`` is unique:
-
+ 
 .. code-block:: json
-
+ 
    [
        {
            "Entity ID": "switch.living_room_fan",
@@ -293,70 +293,73 @@ When grouping multiple switch entities into one registry file, ensure each ``Vol
            "Notes": "Garage light switch"
        }
    ]
-
+ 
 Transfer the registry file and the device configuration file into the VOLTTRON config store using the commands below:
-
+ 
 .. code-block:: bash
-
+ 
    vctl config store platform.driver switch.example.json HomeAssistant_Driver/switch.example.json
    vctl config store platform.driver devices/BUILDING/ROOM/switch.example HomeAssistant_Driver/switch.example.config
-
+ 
 Running Tests
 +++++++++++++++++++++++
-
-Testing the Home Assistant driver should be done in two stages: manual integration testing against a live Home Assistant instance, followed by automated integration and unit tests.
-
-For manual integration testing, run VOLTTRON and Home Assistant in environments that can reach each other over the network. Then:
-
-1. Configure the Home Assistant entities you want to test.
-2. Load the corresponding registry file and device configuration into VOLTTRON.
+ 
+Testing the Home Assistant driver should be done in two stages: manual end-to-end verification against a live Home Assistant instance, followed by automated integration and unit tests.
+ 
+Manual verification
+-------------------
+ 
+For manual verification, run VOLTTRON and Home Assistant in environments that can reach each other over the network.
+ 
+1. Configure the Home Assistant entities used for the feature demo.
+2. Load the corresponding registry file and device configuration into the VOLTTRON config store.
 3. Start the PlatformDriverAgent.
 4. Use the Listener Agent to confirm that VOLTTRON is scraping data from Home Assistant.
-5. Issue write commands from VOLTTRON for the supported points, and verify in the Home Assistant UI that the target entity changes state as expected.
-
-This validates the full integration path:
-
-- VOLTTRON PlatformDriverAgent
-- Home Assistant driver
-- Home Assistant REST API
-- Home Assistant entity state change
-
+5. Issue write commands from VOLTTRON for the supported points and confirm in the Home Assistant UI that the entity state changes as expected.
+ 
+This verifies the complete path from VOLTTRON to Home Assistant and back through the driver publish path.
+ 
 A typical configuration workflow is:
-
+ 
 .. code-block:: bash
-
+ 
    vctl config store platform.driver <registry_name>.csv HomeAssistant_Driver/<registry_name>.csv
    vctl config store platform.driver devices/<campus>/<building>/<unit>/<device_name> HomeAssistant_Driver/<device_config>.config
-
-For testing, connection settings such as the Home Assistant host, port, and access token should be provided through
-environment configuration rather than hard-coded test values. This is different from the device configuration file
-used at runtime, where these values are stored as literal fields in the VOLTTRON config store
-(see `Device configuration`_ above).
-
-After loading the configuration, start the platform driver and use the listener agent to confirm that data is being published on the device topic.
-
-Automated tests should then be run from the VOLTTRON repository root. The current test structure includes integration tests for each supported feature, along with unit tests for handler behavior.
-
-Run the Home Assistant integration tests with:
-
+ 
+Automated integration tests
+---------------------------
+ 
+Automated integration tests are organized by supported feature. Run them from the VOLTTRON repository root:
+ 
 .. code-block:: bash
-
+ 
    pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_light.py
    pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_climate.py
    pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_lock.py
    pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_switch.py
-
-These integration tests verify that VOLTTRON can communicate with a live Home Assistant instance and that supported points behave correctly end-to-end.
-
-If your branch also includes unit tests for the handler modules, run those as well to validate handler logic in isolation:
-
+ 
+These tests verify that VOLTTRON can communicate with a live Home Assistant instance and that each supported feature behaves correctly end-to-end.
+ 
+Unit tests
+----------
+ 
+Unit tests validate handler behavior in isolation and can also be run from the repository root:
+ 
 .. code-block:: bash
-
+ 
    pytest services/core/PlatformDriverAgent/tests/homeassistant/unit/
-
-When documenting test results for this driver, focus on the actual end-to-end behaviors that were verified, such as:
-
+ 
+Configuration for tests
+-----------------------
+ 
+Test connection values such as the Home Assistant host, port, and access token should be supplied through environment configuration used for testing, rather than hard-coded in the repository.
+ 
+Documenting results
+-------------------
+ 
+When reporting test results, focus on the end-to-end behaviors that were verified:
+ 
 - VOLTTRON can read entity state from Home Assistant
 - writable points invoke the expected Home Assistant service calls
 - updated entity states are reflected back through the driver publish path
-- each supported feature behaves correctly in both manual and automated integration tests
+- lights, climates, locks, and switches each work in both manual verification and automated integration tests
