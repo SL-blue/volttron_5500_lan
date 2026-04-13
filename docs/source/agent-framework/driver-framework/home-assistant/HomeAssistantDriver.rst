@@ -1,50 +1,53 @@
 .. _HomeAssistant-Driver:
-
+ 
 Home Assistant Driver
 =====================
-
-The Home Assistant driver enables VOLTTRON to read any data point from any Home Assistant controlled device.
-Currently control(write access) is supported only for lights(state and brightness) and thermostats(state and temperature).
-
+ 
+The Home Assistant driver enables VOLTTRON to read data points from Home Assistant controlled devices through the Home Assistant REST API.
+In the current implementation, write access is supported through domain-specific handlers for lights, thermostats, locks, and switches.
+For example, the driver supports light state and brightness control, thermostat mode, current temperature, and target temperature set points, lock/unlock control for lock entities, and on/off control for switch entities.
 The following diagram shows interaction between platform driver agent and home assistant driver.
-
+ 
 .. mermaid::
-
+ 
    sequenceDiagram
        HomeAssistant Driver->>HomeAssistant: Retrieve Entity Data (REST API)
        HomeAssistant-->>HomeAssistant Driver: Entity Data (Status Code: 200)
        HomeAssistant Driver->>PlatformDriverAgent: Publish Entity Data
        PlatformDriverAgent->>Controller Agent: Publish Entity Data
-
+ 
        Controller Agent->>HomeAssistant Driver: Instruct to Turn Off Light
        HomeAssistant Driver->>HomeAssistant: Send Turn Off Light Command (REST API)
        HomeAssistant-->>HomeAssistant Driver: Command Acknowledgement (Status Code: 200)
-
+ 
 Pre-requisites
 --------------
 Before proceeding, find your Home Assistant IP address and long-lived access token from `here <https://developers.home-assistant.io/docs/auth_api/#long-lived-access-token>`_.
-
+ 
 Clone the repository, start volttron, install the listener agent, and the platform driver agent.
-
+ 
 - `Listener agent <https://volttron.readthedocs.io/en/main/introduction/platform-install.html#installing-and-running-agents>`_
 - `Platform driver agent <https://volttron.readthedocs.io/en/main/agent-framework/core-service-agents/platform-driver/platform-driver-agent.html?highlight=platform%20driver%20isntall#configuring-the-platform-driver>`_
-
+ 
 Configuration
 --------------
-
+ 
 After cloning, generate configuration files. Each device requires one device configuration file and one registry file.
 Ensure your registry_config parameter in your device configuration file, links to correct registry config name in the
 config store. For more details on how volttron platform driver agent works with volttron configuration store see,
 `Platform driver configuration <https://volttron.readthedocs.io/en/main/agent-framework/driver-framework/platform-driver/platform-driver.html#configuration-and-installation>`_
-Examples for lights and thermostats are provided below.
-
+Examples for lights, thermostats, locks, and switches are provided below.
+ 
 Device configuration
 ++++++++++++++++++++
-
-Device configuration file contains the connection details to you home assistant instance and driver_type as "home_assistant"
-
+ 
+Device configuration file contains the connection details to your home assistant instance and driver_type as "home_assistant".
+The connection fields (``ip_address``, ``access_token``, ``port``) are provided as literal values in the device
+configuration file and stored in the VOLTTRON config store at runtime. This is separate from the environment-based
+configuration recommended for testing (see `Running Tests`_ below).
+ 
 .. code-block:: json
-
+ 
    {
        "driver_config": {
            "ip_address": "Your Home Assistant IP",
@@ -56,29 +59,28 @@ Device configuration file contains the connection details to you home assistant 
        "interval": 30,
        "timezone": "UTC"
    }
-
+ 
 Registry Configuration
 +++++++++++++++++++++++
-
+ 
 Registry file can contain one single device and its attributes or a logical group of devices and its
 attributes. Each entry should include the full entity id of the device, including but not limited to home assistant provided prefix
-such as "light.",  "climate." etc. The driver uses these prefixes to convert states into integers.
-Like mentioned before, the driver can only control lights and thermostats but can get data from all devices
-controlled by home assistant
-
+such as "light.", "climate.", "lock.", "switch." etc. The driver uses these prefixes to convert states into integers
+and to route write commands to the correct Home Assistant service.
+ 
 Each entry in a registry file should also have a 'Entity Point' and a unique value for 'Volttron Point Name'. The 'Entity ID' maps to the device instance, the 'Entity Point' extracts the attribute or state, and 'Volttron Point Name' determines the name of that point as it appears in VOLTTRON.
-
+ 
 Attributes can be located in the developer tools in the Home Assistant GUI.
-
+ 
 .. image:: home-assistant.png
-
-
+ 
+ 
 Below is an example file named light.example.json which has attributes of a single light instance with entity
 id 'light.example':
-
-
+ 
+ 
 .. code-block:: json
-
+ 
    [
        {
            "Entity ID": "light.example",
@@ -103,25 +105,25 @@ id 'light.example':
            "Notes": "brightness control, 0 - 255"
        }
    ]
-
-
+ 
+ 
 .. note::
-
+ 
 When using a single registry file to represent a logical group of multiple physical entities, make sure the
 "Volttron Point Name" is unique within a single registry file.
-
+ 
 For example, if a registry file contains entities with
 id  'light.instance1' and 'light.instance2' the entry for the attribute brightness for these two light instances could
 have "Volttron Point Name" as 'light1/brightness' and 'light2/brightness' respectively. This would ensure that data
 is posted to unique topic names and brightness data from light1 is not overwritten by light2 or vice-versa.
-
+ 
 Example Thermostat Registry
 ***************************
-
+ 
 For thermostats, the state is converted into numbers as follows: "0: Off, 2: heat, 3: Cool, 4: Auto",
-
+ 
 .. code-block:: json
-
+ 
    [
        {
            "Entity ID": "climate.my_thermostat",
@@ -157,25 +159,148 @@ For thermostats, the state is converted into numbers as follows: "0: Off, 2: hea
            "Notes": "Target Temp"
        }
    ]
-
-
-
+ 
+ 
+ 
 Transfer the registers files and the config files into the VOLTTRON config store using the commands below:
-
+ 
 .. code-block:: bash
-
+ 
    vctl config store platform.driver light.example.json HomeAssistant_Driver/light.example.json
    vctl config store platform.driver devices/BUILDING/ROOM/light.example HomeAssistant_Driver/light.example.config
-
+ 
 Upon completion, initiate the platform driver. Utilize the listener agent to verify the driver output:
-
+ 
 .. code-block:: bash
-
+ 
    2023-09-12 11:37:00,226 (listeneragent-3.3 211531) __main__ INFO: Peer: pubsub, Sender: platform.driver:, Bus: , Topic: devices/BUILDING/ROOM/light.example/all, Headers: {'Date': '2023-09-12T18:37:00.224648+00:00', 'TimeStamp': '2023-09-12T18:37:00.224648+00:00', 'SynchronizedTimeStamp': '2023-09-12T18:37:00.000000+00:00', 'min_compatible_version': '3.0', 'max_compatible_version': ''}, Message:
    [{'light_brightness': 254, 'state': 'on'},
     {'light_brightness': {'type': 'integer', 'tz': 'UTC', 'units': 'int'},
      'state': {'type': 'integer', 'tz': 'UTC', 'units': 'On / Off'}}]
-
+ 
+Example Lock Registry
+***************************
+ 
+Lock entities support reading and writing the lock state. Writing a value of ``1`` calls the ``lock/lock`` service
+in Home Assistant; writing ``0`` calls ``lock/unlock``.
+ 
+Below is an example file named lock.example.json which has the state attribute of a single lock entity
+with entity id 'lock.front_door':
+ 
+.. code-block:: json
+ 
+   [
+       {
+           "Entity ID": "lock.front_door",
+           "Entity Point": "state",
+           "Volttron Point Name": "front_door_lock_state",
+           "Units": "Locked / Unlocked",
+           "Units Details": "1=locked, 0=unlocked",
+           "Writable": true,
+           "Starting Value": 1,
+           "Type": "int",
+           "Notes": "Front door lock"
+       }
+   ]
+ 
+When grouping multiple lock entities into one registry file, ensure each ``Volttron Point Name`` is unique:
+ 
+.. code-block:: json
+ 
+   [
+       {
+           "Entity ID": "lock.front_door",
+           "Entity Point": "state",
+           "Volttron Point Name": "front_door/state",
+           "Units": "Locked / Unlocked",
+           "Units Details": "1=locked, 0=unlocked",
+           "Writable": true,
+           "Starting Value": 1,
+           "Type": "int",
+           "Notes": "Front door lock"
+       },
+       {
+           "Entity ID": "lock.back_door",
+           "Entity Point": "state",
+           "Volttron Point Name": "back_door/state",
+           "Units": "Locked / Unlocked",
+           "Units Details": "1=locked, 0=unlocked",
+           "Writable": true,
+           "Starting Value": 1,
+           "Type": "int",
+           "Notes": "Back door lock"
+       }
+   ]
+ 
+Transfer the registry file and the device configuration file into the VOLTTRON config store using the commands below:
+ 
+.. code-block:: bash
+ 
+   vctl config store platform.driver lock.example.json HomeAssistant_Driver/lock.example.json
+   vctl config store platform.driver devices/BUILDING/ROOM/lock.example HomeAssistant_Driver/lock.example.config
+ 
+ 
+Example Switch Registry
+***************************
+ 
+Switch entities support reading and writing the on/off state. Writing a value of ``1`` calls the ``switch/turn_on``
+service in Home Assistant; writing ``0`` calls ``switch/turn_off``.
+ 
+Below is an example file named switch.example.json which has the state attribute of a single switch entity
+with entity id 'switch.living_room_fan':
+ 
+.. code-block:: json
+ 
+   [
+       {
+           "Entity ID": "switch.living_room_fan",
+           "Entity Point": "state",
+           "Volttron Point Name": "living_room_fan_state",
+           "Units": "On / Off",
+           "Units Details": "1=on, 0=off",
+           "Writable": true,
+           "Starting Value": 0,
+           "Type": "int",
+           "Notes": "Living room fan switch"
+       }
+   ]
+ 
+When grouping multiple switch entities into one registry file, ensure each ``Volttron Point Name`` is unique:
+ 
+.. code-block:: json
+ 
+   [
+       {
+           "Entity ID": "switch.living_room_fan",
+           "Entity Point": "state",
+           "Volttron Point Name": "living_room_fan/state",
+           "Units": "On / Off",
+           "Units Details": "1=on, 0=off",
+           "Writable": true,
+           "Starting Value": 0,
+           "Type": "int",
+           "Notes": "Living room fan switch"
+       },
+       {
+           "Entity ID": "switch.garage_light",
+           "Entity Point": "state",
+           "Volttron Point Name": "garage_light/state",
+           "Units": "On / Off",
+           "Units Details": "1=on, 0=off",
+           "Writable": true,
+           "Starting Value": 0,
+           "Type": "int",
+           "Notes": "Garage light switch"
+       }
+   ]
+ 
+Transfer the registry file and the device configuration file into the VOLTTRON config store using the commands below:
+ 
+.. code-block:: bash
+ 
+   vctl config store platform.driver switch.example.json HomeAssistant_Driver/switch.example.json
+   vctl config store platform.driver devices/BUILDING/ROOM/switch.example HomeAssistant_Driver/switch.example.config
+ 
 Running Tests
 +++++++++++++++++++++++
 To run the VOLTTRON Home Assistant driver tests, first create a helper toggle named **volttrontest** in your Home Assistant instance. You can create it from **Settings > Devices & services > Helpers > Create Helper > Toggle**.
