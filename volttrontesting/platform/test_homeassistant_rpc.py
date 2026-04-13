@@ -18,7 +18,7 @@ HA_TOKEN="your_home_assistant_token" \
 HA_IP="localhost" \
 HA_PORT="8123" \
 HA_ENTITY_ID="input_boolean.test_light" \
-env/bin/python -m pytest services/core/PlatformDriverAgent/tests/test_homeassistant_rpc.py -s -v
+env/bin/python -m pytest volttrontesting/platform/test_homeassistant_rpc.py -s -v
 
 What this test does:
 - Verifies Home Assistant authorization with a direct API call.
