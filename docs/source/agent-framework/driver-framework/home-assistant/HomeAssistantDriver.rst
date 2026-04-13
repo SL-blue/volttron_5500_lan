@@ -178,9 +178,18 @@ Upon completion, initiate the platform driver. Utilize the listener agent to ver
 
 Running Tests
 +++++++++++++++++++++++
-To run tests on the VOLTTRON home assistant driver you need to create a helper in your home assistant instance. This can be done by going to **Settings > Devices & services > Helpers > Create Helper > Toggle**. Name this new toggle **volttrontest**. After that run the pytest from the root of your VOLTTRON file.
+To run the VOLTTRON Home Assistant driver tests, first create a helper toggle named **volttrontest** in your Home Assistant instance. You can create it from **Settings > Devices & services > Helpers > Create Helper > Toggle**.
+
+You must also update the test configuration values in ``services/core/PlatformDriverAgent/tests/test_home_assistant.py``:
+
+- ``HOMEASSISTANT_TEST_IP``: IP address or hostname of your Home Assistant instance
+- ``ACCESS_TOKEN``: Home Assistant long-lived access token
+- ``PORT``: Port used by your Home Assistant instance
+
+After setting those values, run pytest from the root of your VOLTTRON repository:
 
 .. code-block:: bash
-    pytest volttron/services/core/PlatformDriverAgent/tests/test_home_assistant.py
+
+   pytest services/core/PlatformDriverAgent/tests/test_home_assistant.py
 
 If everything works, you will see 6 passed tests.
