@@ -303,63 +303,18 @@ Transfer the registry file and the device configuration file into the VOLTTRON c
  
 Running Tests
 +++++++++++++++++++++++
- 
-Testing the Home Assistant driver should be done in two stages: manual end-to-end verification against a live Home Assistant instance, followed by automated integration and unit tests.
- 
-Manual verification
--------------------
- 
-For manual verification, run VOLTTRON and Home Assistant in environments that can reach each other over the network.
- 
-1. Configure the Home Assistant entities used for the feature demo.
-2. Load the corresponding registry file and device configuration into the VOLTTRON config store.
-3. Start the PlatformDriverAgent.
-4. Use the Listener Agent to confirm that VOLTTRON is scraping data from Home Assistant.
-5. Issue write commands from VOLTTRON for the supported points and confirm in the Home Assistant UI that the entity state changes as expected.
- 
-This verifies the complete path from VOLTTRON to Home Assistant and back through the driver publish path.
- 
-A typical configuration workflow is:
- 
+To run the VOLTTRON Home Assistant driver tests, first create a helper toggle named **volttrontest** in your Home Assistant instance. You can create it from **Settings > Devices & services > Helpers > Create Helper > Toggle**.
+
+You must also update the test configuration values in ``services/core/PlatformDriverAgent/tests/test_home_assistant.py``:
+
+- ``HOMEASSISTANT_TEST_IP``: IP address or hostname of your Home Assistant instance
+- ``ACCESS_TOKEN``: Home Assistant long-lived access token
+- ``PORT``: Port used by your Home Assistant instance
+
+After setting those values, run pytest from the root of your VOLTTRON repository:
+
 .. code-block:: bash
- 
-   vctl config store platform.driver <registry_name>.csv HomeAssistant_Driver/<registry_name>.csv
-   vctl config store platform.driver devices/<campus>/<building>/<unit>/<device_name> HomeAssistant_Driver/<device_config>.config
- 
-Automated integration tests
----------------------------
- 
-Automated integration tests are organized by supported feature. Run them from the VOLTTRON repository root:
- 
-.. code-block:: bash
- 
-   pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_light.py
-   pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_climate.py
-   pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_lock.py
-   pytest services/core/PlatformDriverAgent/tests/homeassistant/integration/test_integration_switch.py
- 
-These tests verify that VOLTTRON can communicate with a live Home Assistant instance and that each supported feature behaves correctly end-to-end.
- 
-Unit tests
-----------
- 
-Unit tests validate handler behavior in isolation and can also be run from the repository root:
- 
-.. code-block:: bash
- 
-   pytest services/core/PlatformDriverAgent/tests/homeassistant/unit/
- 
-Configuration for tests
------------------------
- 
-Test connection values such as the Home Assistant host, port, and access token should be supplied through environment configuration used for testing, rather than hard-coded in the repository.
- 
-Documenting results
--------------------
- 
-When reporting test results, focus on the end-to-end behaviors that were verified:
- 
-- VOLTTRON can read entity state from Home Assistant
-- writable points invoke the expected Home Assistant service calls
-- updated entity states are reflected back through the driver publish path
-- lights, climates, locks, and switches each work in both manual verification and automated integration tests
+
+   pytest services/core/PlatformDriverAgent/tests/test_home_assistant.py
+
+If everything works, you will see 6 passed tests.
